@@ -229,19 +229,19 @@ TEST_CASE("test gguf rejects oversized ndim") {
     std::ofstream f(file_path, std::ios::binary);
     // GGUF header
     f.write("GGUF", 4);
-    write_le32(f, 3);              // version
-    write_le64(f, 1);              // tensor_count = 1
-    write_le64(f, 0);              // metadata_kv_count = 0
+    write_le32(f, 3); // version
+    write_le64(f, 1); // tensor_count = 1
+    write_le64(f, 0); // metadata_kv_count = 0
 
     // Tensor info
     write_le64(f, name_len);
     f.write(tensor_name, name_len);
     write_le32(f, malicious_ndim); // ndim = 32 (malicious)
     for (uint32_t i = 0; i < malicious_ndim; i++) {
-      write_le64(f, 1);           // each dim = 1
+      write_le64(f, 1); // each dim = 1
     }
-    write_le32(f, 0);             // type = F32
-    write_le64(f, 0);             // offset = 0
+    write_le32(f, 0); // type = F32
+    write_le64(f, 0); // offset = 0
 
     // Pad to alignment, then write tensor data
     auto pos = f.tellp();
