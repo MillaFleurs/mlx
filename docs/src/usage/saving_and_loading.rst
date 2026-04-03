@@ -79,3 +79,10 @@ The functions :func:`save_safetensors` and :func:`save_gguf` are similar to
    >>> a = mx.array([1.0])
    >>> b = mx.array([2.0])
    >>> mx.save_safetensors("arrays", {"a": a, "b": b})
+
+.. note::
+
+   When loading GGUF files from untrusted sources, MLX validates tensor
+   dimensions against the maximum supported by the format (8 dimensions).
+   Files with invalid dimension counts will raise an error rather than
+   risk reading out-of-bounds memory.

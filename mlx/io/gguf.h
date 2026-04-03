@@ -10,6 +10,13 @@ extern "C" {
 #include <gguflib.h>
 }
 
+// Maximum number of tensor dimensions supported by the GGUF format.
+// Mirrors GGUF_TENSOR_MAX_DIM from gguflib.h. Override at compile time
+// with -DMLX_GGUF_MAX_DIMS=<value> if the upstream format changes.
+#ifndef MLX_GGUF_MAX_DIMS
+#define MLX_GGUF_MAX_DIMS GGUF_TENSOR_MAX_DIM
+#endif
+
 namespace mlx::core {
 
 Shape get_shape(const gguf_tensor& tensor);

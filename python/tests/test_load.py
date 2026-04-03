@@ -300,6 +300,43 @@ class TestLoad(mlx_tests.MLXTestCase):
             else:
                 self.assertEqual(meta_load_dict[k], v)
 
+    @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
+    def test_gguf_rejects_oversized_ndim(self):
+        """Verify that loading a GGUF file with ndim > 8 raises an error."""
+        import struct
+
+        malicious_ndim = 32
+        tensor_name = b"weight"
+        alignment = 32
+
+        buf = bytearray()
+        # GGUF header (v3)
+        buf += b"GGUF"
+        buf += struct.pack("<I", 3)  # version
+        buf += struct.pack("<Q", 1)  # tensor_count
+        buf += struct.pack("<Q", 0)  # metadata_kv_count
+
+        # Tensor info
+        buf += struct.pack("<Q", len(tensor_name))
+        buf += tensor_name
+        buf += struct.pack("<I", malicious_ndim)  # ndim = 32 (malicious)
+        for _ in range(malicious_ndim):
+            buf += struct.pack("<Q", 1)  # each dim = 1
+        buf += struct.pack("<I", 0)  # type = F32
+        buf += struct.pack("<Q", 0)  # offset = 0
+
+        # Pad to alignment, then append tensor data
+        pad_needed = (alignment - (len(buf) % alignment)) % alignment
+        buf += b"\x00" * pad_needed
+        buf += struct.pack("<f", 1.0)
+
+        bad_file = os.path.join(self.test_dir, "bad_ndim.gguf")
+        with open(bad_file, "wb") as f:
+            f.write(buf)
+
+        with self.assertRaises(RuntimeError):
+            mx.load(bad_file)
+
     def test_save_and_load_fs(self):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)

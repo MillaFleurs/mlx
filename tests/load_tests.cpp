@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <vector>
 
@@ -199,6 +200,61 @@ TEST_CASE("test gguf metadata") {
     auto& str = std::get<std::string>(loaded_metadata["meta4"]);
     CHECK_EQ(str, "last");
   }
+}
+
+TEST_CASE("test gguf rejects oversized ndim") {
+  // Build a minimal GGUF v3 file with ndim=32 (exceeds GGUF_TENSOR_MAX_DIM=8).
+  // Verifies the bounds check in get_shape() catches malicious files.
+  std::string file_path = get_temp_file("test_bad_ndim.gguf");
+
+  constexpr uint32_t malicious_ndim = 32;
+  constexpr const char* tensor_name = "weight";
+  constexpr size_t name_len = 6;
+  constexpr uint32_t alignment = 32;
+
+  auto write_le32 = [](std::ofstream& f, uint32_t v) {
+    char buf[4];
+    for (int i = 0; i < 4; i++)
+      buf[i] = (v >> (i * 8)) & 0xFF;
+    f.write(buf, 4);
+  };
+  auto write_le64 = [](std::ofstream& f, uint64_t v) {
+    char buf[8];
+    for (int i = 0; i < 8; i++)
+      buf[i] = (v >> (i * 8)) & 0xFF;
+    f.write(buf, 8);
+  };
+
+  {
+    std::ofstream f(file_path, std::ios::binary);
+    // GGUF header
+    f.write("GGUF", 4);
+    write_le32(f, 3);              // version
+    write_le64(f, 1);              // tensor_count = 1
+    write_le64(f, 0);              // metadata_kv_count = 0
+
+    // Tensor info
+    write_le64(f, name_len);
+    f.write(tensor_name, name_len);
+    write_le32(f, malicious_ndim); // ndim = 32 (malicious)
+    for (uint32_t i = 0; i < malicious_ndim; i++) {
+      write_le64(f, 1);           // each dim = 1
+    }
+    write_le32(f, 0);             // type = F32
+    write_le64(f, 0);             // offset = 0
+
+    // Pad to alignment, then write tensor data
+    auto pos = f.tellp();
+    size_t data_start =
+        ((size_t)pos + alignment - 1) & ~(size_t)(alignment - 1);
+    for (size_t i = (size_t)pos; i < data_start; i++) {
+      f.put(0);
+    }
+    float one = 1.0f;
+    f.write(reinterpret_cast<const char*>(&one), sizeof(float));
+  }
+
+  CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
 }
 
 TEST_CASE("test single array serialization") {

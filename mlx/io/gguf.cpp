@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fstream>
 #include <numeric>
+#include <sstream>
 
 #include "mlx/io/gguf.h"
 #include "mlx/ops.h"
@@ -48,6 +49,13 @@ std::optional<Dtype> gguf_type_to_dtype(const uint32_t& gguf_type) {
 }
 
 Shape get_shape(const gguf_tensor& tensor) {
+  if (tensor.ndim > MLX_GGUF_MAX_DIMS) {
+    std::ostringstream msg;
+    msg << "[load_gguf] Tensor has " << tensor.ndim
+        << " dimensions, but the maximum supported is " << MLX_GGUF_MAX_DIMS
+        << ". The file may be corrupt or malicious.";
+    throw std::runtime_error(msg.str());
+  }
   Shape shape;
   // The dimension order in GGML is the reverse of the order used in MLX.
   for (int i = tensor.ndim - 1; i >= 0; i--) {
