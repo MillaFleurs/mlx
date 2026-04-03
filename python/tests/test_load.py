@@ -127,6 +127,58 @@ class TestLoad(mlx_tests.MLXTestCase):
                             mx.array_equal(load_dict["test"], save_dict["test"])
                         )
 
+    def test_safetensors_rejects_mismatched_data_offsets(self):
+        """Verify that data_offsets inconsistent with shape/dtype raise an error."""
+        import json
+        import struct
+
+        # shape=[1000,1000] F32 = 4,000,000 bytes, but data_offsets say 4
+        header = json.dumps(
+            {"t": {"dtype": "F32", "shape": [1000, 1000], "data_offsets": [0, 4]}}
+        )
+        buf = struct.pack("<Q", len(header)) + header.encode() + struct.pack("<f", 1.0)
+
+        bad_file = os.path.join(self.test_dir, "bad_offsets.safetensors")
+        with open(bad_file, "wb") as f:
+            f.write(buf)
+
+        with self.assertRaises(RuntimeError):
+            mx.load(bad_file)
+
+    def test_safetensors_rejects_bad_data_offsets_count(self):
+        """Verify that data_offsets with != 2 entries raises an error."""
+        import json
+        import struct
+
+        header = json.dumps(
+            {"t": {"dtype": "F32", "shape": [1], "data_offsets": [0, 4, 8]}}
+        )
+        buf = struct.pack("<Q", len(header)) + header.encode() + struct.pack("<f", 1.0)
+
+        bad_file = os.path.join(self.test_dir, "bad_offsets_count.safetensors")
+        with open(bad_file, "wb") as f:
+            f.write(buf)
+
+        with self.assertRaises(RuntimeError):
+            mx.load(bad_file)
+
+    def test_safetensors_rejects_inverted_data_offsets(self):
+        """Verify that data_offsets[0] > data_offsets[1] raises an error."""
+        import json
+        import struct
+
+        header = json.dumps(
+            {"t": {"dtype": "F32", "shape": [1], "data_offsets": [4, 0]}}
+        )
+        buf = struct.pack("<Q", len(header)) + header.encode() + struct.pack("<f", 1.0)
+
+        bad_file = os.path.join(self.test_dir, "bad_offsets_inverted.safetensors")
+        with open(bad_file, "wb") as f:
+            f.write(buf)
+
+        with self.assertRaises(RuntimeError):
+            mx.load(bad_file)
+
     @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
     def test_save_and_load_gguf(self):
         if not os.path.isdir(self.test_dir):

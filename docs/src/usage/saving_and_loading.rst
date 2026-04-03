@@ -82,7 +82,8 @@ The functions :func:`save_safetensors` and :func:`save_gguf` are similar to
 
 .. note::
 
-   When loading GGUF files from untrusted sources, MLX validates tensor
-   dimensions against the maximum supported by the format (8 dimensions).
-   Files with invalid dimension counts will raise an error rather than
-   risk reading out-of-bounds memory.
+   When loading files from untrusted sources, MLX validates tensor metadata
+   before use. GGUF files are checked for valid dimension counts (max 8).
+   SafeTensors files are checked for consistent ``data_offsets`` (exactly 2
+   entries, correct ordering, and byte range matching the declared shape and
+   dtype). Invalid files will raise an error.

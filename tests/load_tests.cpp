@@ -41,6 +41,67 @@ TEST_CASE("test save_safetensors") {
   CHECK(array_equal(test2, ones({2, 2})).item<bool>());
 }
 
+TEST_CASE("test safetensors rejects mismatched data_offsets") {
+  // Build a minimal safetensors file where data_offsets claim 4 bytes
+  // but shape declares 1000x1000 float32 (4,000,000 bytes).
+  // Verifies that load_safetensors() catches the mismatch.
+  std::string file_path = get_temp_file("test_bad_offsets.safetensors");
+
+  std::string header =
+      R"({"t":{"dtype":"F32","shape":[1000,1000],"data_offsets":[0,4]}})";
+  uint64_t header_len = header.size();
+
+  {
+    std::ofstream f(file_path, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(&header_len), 8);
+    f.write(header.c_str(), header_len);
+    // Write only 4 bytes of data (the offsets claim [0,4])
+    float one = 1.0f;
+    f.write(reinterpret_cast<const char*>(&one), sizeof(float));
+  }
+
+  CHECK_THROWS_AS(load_safetensors(file_path), std::runtime_error);
+}
+
+TEST_CASE("test safetensors rejects bad data_offsets count") {
+  // data_offsets has 3 entries instead of the required 2.
+  std::string file_path = get_temp_file("test_bad_offsets_count.safetensors");
+
+  std::string header =
+      R"({"t":{"dtype":"F32","shape":[1],"data_offsets":[0,4,8]}})";
+  uint64_t header_len = header.size();
+
+  {
+    std::ofstream f(file_path, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(&header_len), 8);
+    f.write(header.c_str(), header_len);
+    float one = 1.0f;
+    f.write(reinterpret_cast<const char*>(&one), sizeof(float));
+  }
+
+  CHECK_THROWS_AS(load_safetensors(file_path), std::runtime_error);
+}
+
+TEST_CASE("test safetensors rejects inverted data_offsets") {
+  // data_offsets[0] > data_offsets[1]
+  std::string file_path =
+      get_temp_file("test_bad_offsets_inverted.safetensors");
+
+  std::string header =
+      R"({"t":{"dtype":"F32","shape":[1],"data_offsets":[4,0]}})";
+  uint64_t header_len = header.size();
+
+  {
+    std::ofstream f(file_path, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(&header_len), 8);
+    f.write(header.c_str(), header_len);
+    float one = 1.0f;
+    f.write(reinterpret_cast<const char*>(&one), sizeof(float));
+  }
+
+  CHECK_THROWS_AS(load_safetensors(file_path), std::runtime_error);
+}
+
 TEST_CASE("test gguf") {
   std::string file_path = get_temp_file("test_arr.gguf");
   using dict = std::unordered_map<std::string, array>;
@@ -229,19 +290,19 @@ TEST_CASE("test gguf rejects oversized ndim") {
     std::ofstream f(file_path, std::ios::binary);
     // GGUF header
     f.write("GGUF", 4);
-    write_le32(f, 3);              // version
-    write_le64(f, 1);              // tensor_count = 1
-    write_le64(f, 0);              // metadata_kv_count = 0
+    write_le32(f, 3); // version
+    write_le64(f, 1); // tensor_count = 1
+    write_le64(f, 0); // metadata_kv_count = 0
 
     // Tensor info
     write_le64(f, name_len);
     f.write(tensor_name, name_len);
     write_le32(f, malicious_ndim); // ndim = 32 (malicious)
     for (uint32_t i = 0; i < malicious_ndim; i++) {
-      write_le64(f, 1);           // each dim = 1
+      write_le64(f, 1); // each dim = 1
     }
-    write_le32(f, 0);             // type = F32
-    write_le64(f, 0);             // offset = 0
+    write_le32(f, 0); // type = F32
+    write_le64(f, 0); // offset = 0
 
     // Pad to alignment, then write tensor data
     auto pos = f.tellp();
