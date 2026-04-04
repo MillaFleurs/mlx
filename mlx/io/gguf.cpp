@@ -1,10 +1,11 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <fmt/format.h>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <numeric>
+
+#include <fmt/format.h>
 
 #include "mlx/io/gguf.h"
 #include "mlx/ops.h"
@@ -49,13 +50,13 @@ std::optional<Dtype> gguf_type_to_dtype(const uint32_t& gguf_type) {
 }
 
 Shape get_shape(const gguf_tensor& tensor) {
-  if (tensor.ndim > MLX_GGUF_MAX_DIMS) {
+  if (tensor.ndim > GGUF_TENSOR_MAX_DIM) {
     throw std::runtime_error(
         fmt::format(
             "[load_gguf] Tensor has {} dimensions, but the maximum supported is {}."
             " The file may be corrupt or malicious.",
             tensor.ndim,
-            MLX_GGUF_MAX_DIMS));
+            GGUF_TENSOR_MAX_DIM));
   }
   Shape shape;
   // The dimension order in GGML is the reverse of the order used in MLX.
