@@ -79,3 +79,10 @@ The functions :func:`save_safetensors` and :func:`save_gguf` are similar to
    >>> a = mx.array([1.0])
    >>> b = mx.array([2.0])
    >>> mx.save_safetensors("arrays", {"a": a, "b": b})
+
+.. note::
+
+   When loading ``.npy`` files from untrusted sources, MLX validates that the
+   header length does not exceed 65,536 bytes. NumPy v2 format files with
+   excessively large header lengths will raise an error rather than risk
+   denial-of-service through memory exhaustion.

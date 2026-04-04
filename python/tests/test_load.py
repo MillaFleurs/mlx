@@ -127,6 +127,22 @@ class TestLoad(mlx_tests.MLXTestCase):
                             mx.array_equal(load_dict["test"], save_dict["test"])
                         )
 
+    def test_npy_v2_rejects_oversized_header_len(self):
+        """Verify that a .npy v2 file with header_len=0xFFFFFFFF is rejected."""
+        import struct
+
+        buf = bytearray()
+        buf += b"\x93NUMPY"  # magic
+        buf += b"\x02\x00"  # version 2.0
+        buf += struct.pack("<I", 0xFFFFFFFF)  # header_len = max uint32
+
+        bad_file = os.path.join(self.test_dir, "bad_npy_header.npy")
+        with open(bad_file, "wb") as f:
+            f.write(buf)
+
+        with self.assertRaises(RuntimeError):
+            mx.load(bad_file)
+
     @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
     def test_save_and_load_gguf(self):
         if not os.path.isdir(self.test_dir):

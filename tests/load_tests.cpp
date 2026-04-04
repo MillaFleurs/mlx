@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <vector>
 
@@ -199,6 +200,27 @@ TEST_CASE("test gguf metadata") {
     auto& str = std::get<std::string>(loaded_metadata["meta4"]);
     CHECK_EQ(str, "last");
   }
+}
+
+TEST_CASE("test npy v2 rejects oversized header_len") {
+  // Craft a minimal .npy v2 file with header_len = 0xFFFFFFFF.
+  // Verifies the loader rejects it instead of allocating ~4 GiB.
+  std::string file_path = get_temp_file("test_bad_npy_header.npy");
+
+  {
+    std::ofstream f(file_path, std::ios::binary);
+    // Magic "\x93NUMPY"
+    const uint8_t magic[] = {0x93, 0x4e, 0x55, 0x4d, 0x50, 0x59};
+    f.write(reinterpret_cast<const char*>(magic), 6);
+    // Version 2.0
+    f.put(0x02);
+    f.put(0x00);
+    // header_len = 0xFFFFFFFF (little-endian)
+    uint32_t bad_header_len = 0xFFFFFFFF;
+    f.write(reinterpret_cast<const char*>(&bad_header_len), 4);
+  }
+
+  CHECK_THROWS_AS(load(file_path), std::runtime_error);
 }
 
 TEST_CASE("test single array serialization") {
