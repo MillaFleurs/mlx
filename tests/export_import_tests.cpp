@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <vector>
 
@@ -160,4 +161,41 @@ TEST_CASE("test export function on different stream") {
 
   // Should make a new stream that we can run computation on
   eval(import_function(file_path)({array({0, 1, 2})}));
+}
+
+TEST_CASE("test import rejects oversized tape_size") {
+  // Craft a minimal .mlxfn with tape_size = UINT64_MAX.
+  // Verifies the importer rejects it instead of allocating unbounded memory.
+  std::string file_path = get_temp_file("test_bad_tape.mlxfn");
+
+  auto write_le64 = [](std::ofstream& f, uint64_t v) {
+    f.write(reinterpret_cast<const char*>(&v), 8);
+  };
+  auto write_le32 = [](std::ofstream& f, int32_t v) {
+    f.write(reinterpret_cast<const char*>(&v), 4);
+  };
+
+  {
+    std::ofstream f(file_path, std::ios::binary);
+    // Version string: "0.0.0"
+    std::string ver = "0.0.0";
+    write_le64(f, ver.size());
+    f.write(ver.data(), ver.size());
+    // function_count = 1
+    write_le32(f, 1);
+    // shapeless = false
+    f.put(0x00);
+    // kwarg_keys = [] (empty vector: size=0)
+    write_le64(f, 0);
+    // trace_input_ids = [] (empty vector: size=0)
+    write_le64(f, 0);
+    // trace_inputs = [] (empty vector: size=0)
+    write_le64(f, 0);
+    // trace_output_ids = [] (empty vector: size=0)
+    write_le64(f, 0);
+    // tape_size = UINT64_MAX (malicious)
+    write_le64(f, UINT64_MAX);
+  }
+
+  CHECK_THROWS_AS(import_function(file_path), std::runtime_error);
 }

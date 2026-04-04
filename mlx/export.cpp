@@ -1062,6 +1062,13 @@ ImportedFunction::ImportedFunction(const std::string& file)
 
     std::vector<array> tape;
     auto tape_size = deserialize<uint64_t>(is);
+    constexpr uint64_t kMaxTapeSize = 10'000'000;
+    if (tape_size > kMaxTapeSize) {
+      throw std::runtime_error(
+          "[import_function] tape_size=" + std::to_string(tape_size) +
+          " exceeds maximum allowed size (" + std::to_string(kMaxTapeSize) +
+          ")");
+    }
     tape.reserve(tape_size);
 
     auto factory = PrimitiveFactory();
